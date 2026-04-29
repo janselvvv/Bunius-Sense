@@ -6,9 +6,10 @@ import {
   BarChart3Icon,
   SparklesIcon,
   CpuIcon,
-  MenuIcon
+  MenuIcon,
+  DropletsIcon
 } from 'lucide-react';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from './ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from './ui/sheet';
 import { Button } from './ui/button';
 import Logo from './Logo';
 
@@ -28,6 +29,7 @@ export default function Navigation({ currentScreen, setCurrentScreen }: Navigati
     { id: 'dashboard', icon: HomeIcon, label: 'Dashboard' },
     { id: 'sorting', icon: ScanLineIcon, label: 'Fruit Sorting' },
     { id: 'fermentation', icon: TrendingUpIcon, label: 'Fermentation' },
+    { id: 'filling', icon: DropletsIcon, label: 'Bottle Filling' },
     { id: 'notifications', icon: BellIcon, label: 'Notifications' },
     { id: 'reports', icon: BarChart3Icon, label: 'Reports' },
     { id: 'insights', icon: SparklesIcon, label: 'AI Insights' },
@@ -37,8 +39,8 @@ export default function Navigation({ currentScreen, setCurrentScreen }: Navigati
   return (
     <>
       {/* Bottom Navigation */}
-     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
-  <div className="w-full">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
+        <div className="w-full">
           <div className="flex items-center justify-around p-2">
             {mainNavItems.map((item) => {
               const Icon = item.icon;
@@ -49,9 +51,7 @@ export default function Navigation({ currentScreen, setCurrentScreen }: Navigati
                   key={item.id}
                   onClick={() => setCurrentScreen(item.id)}
                   className={`flex flex-col items-center justify-center p-2 rounded-lg min-w-[70px] transition-colors ${
-                    isActive
-                      ? 'text-[#8B1538]'
-                      : 'text-gray-500'
+                    isActive ? 'text-[#8B1538]' : 'text-gray-500'
                   }`}
                 >
                   <Icon className={`w-6 h-6 mb-1 ${isActive ? 'fill-[#8B1538]' : ''}`} />
@@ -82,20 +82,18 @@ export default function Navigation({ currentScreen, setCurrentScreen }: Navigati
                     const isActive = currentScreen === item.id;
                     
                     return (
-                      <Button
-                        key={item.id}
-                        variant={isActive ? "default" : "outline"}
-                        className={`h-auto py-4 flex flex-col gap-2 ${
-                          isActive ? 'bg-[#8B1538] hover:bg-[#6B1028]' : ''
-                        }`}
-                        onClick={() => {
-                          setCurrentScreen(item.id);
-                          // Close sheet programmatically if needed
-                        }}
-                      >
-                        <Icon className="w-6 h-6" />
-                        <span className="text-xs">{item.label}</span>
-                      </Button>
+                      <SheetClose asChild key={item.id}>
+                        <Button
+                          variant={isActive ? "default" : "outline"}
+                          className={`h-auto py-4 flex flex-col gap-2 ${
+                            isActive ? 'bg-[#8B1538] hover:bg-[#6B1028] text-white' : ''
+                          }`}
+                          onClick={() => setCurrentScreen(item.id)}
+                        >
+                          <Icon className="w-6 h-6" />
+                          <span className="text-xs">{item.label}</span>
+                        </Button>
+                      </SheetClose>
                     );
                   })}
                 </div>

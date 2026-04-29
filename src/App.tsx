@@ -11,6 +11,8 @@ import ReportsAnalytics from "./components/ReportsAnalytics";
 import PredictiveInsights from "./components/PredictiveInsights";
 import DeviceControl from "./components/DeviceControl";
 import Navigation from "./components/Navigation";
+// ADDED: Import the new Bottle Filling Page
+import BottleFillingPage from "./components/BottleFillingPage"; 
 
 import { auth } from "./lib/firebase";
 
@@ -38,11 +40,14 @@ function MainLayout() {
   return (
     <div className="min-h-screen bg-white">
       <div className="w-full bg-white min-h-screen pb-20">
+        {/* Conditional Rendering based on currentScreen state */}
         {currentScreen === "dashboard" && (
           <Dashboard userRole={auth.currentUser?.email ?? "User"} />
         )}
         {currentScreen === "sorting" && <FruitSorting />}
         {currentScreen === "fermentation" && <FermentationTracker />}
+        {/* ADDED: The new Bottle Filling render condition */}
+        {currentScreen === "filling" && <BottleFillingPage />} 
         {currentScreen === "notifications" && <NotificationCenter />}
         {currentScreen === "reports" && <ReportsAnalytics />}
         {currentScreen === "insights" && <PredictiveInsights />}
