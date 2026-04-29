@@ -4,9 +4,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
-import logoImage from "../assets/fermalogo.png";
 import { Eye, EyeOff } from "lucide-react";
-
 
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../lib/firebase"; 
@@ -21,7 +19,10 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-const [showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Added your working ImgBB direct link
+  const logoUrl = "https://i.ibb.co/psTtv5x/logo.png";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,7 +78,7 @@ const [showPassword, setShowPassword] = useState(false);
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center mb-4">
               <img
-                src={logoImage}
+                src={logoUrl}
                 alt="Project FERMA Logo"
                 className="w-48 h-48 object-contain filter drop-shadow-2xl"
               />
@@ -101,36 +102,35 @@ const [showPassword, setShowPassword] = useState(false);
                 />
               </div>
 
-             <div className="space-y-1">
-  <Label htmlFor="password">Password</Label>
+              <div className="space-y-1">
+                <Label htmlFor="password">Password</Label>
 
-  <div className="relative">
-    <Input
-      id="password"
-      type={showPassword ? "text" : "password"}
-      placeholder="Enter password"
-      value={password}
-      onChange={(e) => setPassword(e.target.value)}
-      className="pr-10 h-11"
-      required
-    />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pr-10 h-11"
+                    required
+                  />
 
-    <button
-      type="button"
-      onClick={() => setShowPassword((v) => !v)}
-      className="
-        absolute inset-y-0 right-2
-        flex items-center
-        text-gray-500
-        hover:text-gray-700
-      "
-      aria-label={showPassword ? "Hide password" : "Show password"}
-    >
-      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-    </button>
-  </div>
-</div>
-
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="
+                      absolute inset-y-0 right-2
+                      flex items-center
+                      text-gray-500
+                      hover:text-gray-700
+                    "
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
 
               {err && <p className="text-sm text-red-600">{err}</p>}
               {msg && <p className="text-sm text-green-700">{msg}</p>}
