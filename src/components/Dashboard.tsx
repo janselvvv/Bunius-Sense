@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input"; // ✅ Imported Input field
+import { Input } from "./ui/input";
 import {
   ThermometerIcon,
   DropletIcon,
@@ -13,7 +13,7 @@ import {
   PlayCircleIcon,
   StopCircleIcon,
   AlertTriangleIcon,
-  XIcon // ✅ Imported XIcon for the close button
+  XIcon
 } from "lucide-react";
 import {
   LineChart,
@@ -120,7 +120,6 @@ export default function Dashboard({ userRole }: DashboardProps) {
 
   const [isStopModalOpen, setIsStopModalOpen] = useState<boolean>(false);
   
-  // ✅ ADDED: State for the Start Batch Modal
   const [isStartModalOpen, setIsStartModalOpen] = useState<boolean>(false);
   const [newBatch, setNewBatch] = useState({ volume: '', fruits: '', targetBrix: '2.0' });
 
@@ -327,12 +326,10 @@ export default function Dashboard({ userRole }: DashboardProps) {
     return () => clearInterval(id);
   }, [updatedAt]);
 
-  // ✅ ACTION: Create the Batch using the User's Real Input
   const handleStartBatch = async (e: any) => {
     e.preventDefault();
     if (!db) return;
     
-    // Wipe ghosts
     await set(ref(db, 'sensors/history'), null);
     await set(ref(db, 'sensors/sugar/history'), null);
     await set(ref(db, 'sensors/current'), null);
@@ -344,7 +341,6 @@ export default function Dashboard({ userRole }: DashboardProps) {
     setBrixNow(null);
     setPressureNow(null);
 
-    // Save with the ACTUAL user input from the modal
     await set(ref(db, 'fermentation/currentBatch'), {
       details: {
         batchId: `Batch #${Date.now().toString().slice(-4)}`,
@@ -362,8 +358,8 @@ export default function Dashboard({ userRole }: DashboardProps) {
       ]
     });
 
-    setIsStartModalOpen(false); // Close Modal
-    setNewBatch({ volume: '', fruits: '', targetBrix: '2.0' }); // Reset Form
+    setIsStartModalOpen(false);
+    setNewBatch({ volume: '', fruits: '', targetBrix: '2.0' });
   };
 
   const handleStopBatch = async () => {
@@ -371,7 +367,6 @@ export default function Dashboard({ userRole }: DashboardProps) {
     
     let finalYield = "Unknown";
     if (activeBatchDetails) {
-      // It now accurately parses the real volume you typed in!
       const initVolMatch = String(activeBatchDetails.initialVolume || "0").match(/\d+/);
       const initialVolNum = initVolMatch ? parseInt(initVolMatch[0], 10) : 0;
       finalYield = initialVolNum > 0 ? `${Math.round(initialVolNum * 0.90)}L` : "Unknown";
@@ -391,7 +386,6 @@ export default function Dashboard({ userRole }: DashboardProps) {
     });
 
     await set(ref(db, 'fermentation/currentBatch'), null);
-
     await set(ref(db, 'sensors/history'), null);
     await set(ref(db, 'sensors/sugar/history'), null);
     
@@ -432,34 +426,13 @@ export default function Dashboard({ userRole }: DashboardProps) {
 
   return (
     <div className="p-4 space-y-4 pb-20">
-      {/* Header */}
-      <div className="flex justify-between items-start mb-6">
-        <div className="flex items-center gap-3">
-          <Logo size="sm" />
-          <div>
-            <h1 className="text-gray-900">Dashboard</h1>
-            <p className="text-sm text-gray-500">Welcome back, {userRole}</p>
-            <p className="text-xs text-gray-400">
-              {updatedAt ? `Updated: ${new Date(updatedAt).toLocaleString()}` : "No data yet"}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-col items-end gap-2">
-           <div className="flex items-center gap-2">
-             <motion.div
-               animate={{ scale: [1, 1.2, 1] }}
-               transition={{ duration: 2, repeat: Infinity }}
-               className={`w-2 h-2 rounded-full ${isLive ? "bg-green-500" : "bg-gray-400"}`}
-             />
-             <span className="text-sm text-gray-600">{isLive ? "Live Data" : "Offline"}</span>
-           </div>
-           <div className="flex items-center gap-1.5 opacity-60">
-             <div className={`w-1.5 h-1.5 rounded-full ${canNotify && isBatchActive ? 'bg-blue-500' : 'bg-amber-500'}`} />
-             <span className="text-[10px] uppercase font-bold text-gray-500">
-                {canNotify && isBatchActive ? 'Alerts Armed' : 'Alerts Disabled'}
-             </span>
-           </div>
+      
+      {/* THE NEW CLEAN HEADER */}
+      <div className="flex items-center gap-3 mb-8">
+        <Logo size="sm" />
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-500 text-sm mt-1">System overview and analytics</p>
         </div>
       </div>
 
@@ -481,7 +454,6 @@ export default function Dashboard({ userRole }: DashboardProps) {
                 <StopCircleIcon className="w-4 h-4" /> End Batch
               </Button>
            ) : (
-              // ✅ CHANGED: Opens the modal instead of instantly starting
               <Button onClick={() => setIsStartModalOpen(true)} size="sm" className="gap-1 bg-[#8B1538] text-white hover:bg-[#6b102b] border-none shadow-sm">
                 <PlayCircleIcon className="w-4 h-4" /> Start New Batch
               </Button>
@@ -496,7 +468,7 @@ export default function Dashboard({ userRole }: DashboardProps) {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm opacity-90 mb-1">Wine Status</p>
-                <p className="text-white">{isBatchActive ? 'Active' : 'Idle'}</p>
+                <p className="text-white font-semibold">{isBatchActive ? 'Active' : 'Idle'}</p>
               </div>
               <FlaskConicalIcon className="w-8 h-8 opacity-80" />
             </div>
@@ -508,7 +480,7 @@ export default function Dashboard({ userRole }: DashboardProps) {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm opacity-90 mb-1">System Stability</p>
-                <p className="text-white">{isBatchActive ? 'Optimal' : 'Standby'}</p>
+                <p className="text-white font-semibold">{isBatchActive ? 'Optimal' : 'Standby'}</p>
               </div>
               <TrendingUpIcon className="w-8 h-8 opacity-80" />
             </div>
@@ -519,7 +491,7 @@ export default function Dashboard({ userRole }: DashboardProps) {
       {/* Sensor Readings */}
       <div className={!isBatchActive ? 'opacity-60 grayscale-[0.3] pointer-events-none' : ''}>
         <h2 className="text-gray-900 mb-3 flex items-center justify-between">
-          <span>Real-time Sensors</span>
+          <span className="font-bold">Real-time Sensors</span>
           {!isBatchActive && <span className="text-xs text-amber-600 font-bold px-2 py-1 bg-amber-100 rounded">Monitoring Disabled</span>}
         </h2>
 
@@ -537,7 +509,7 @@ export default function Dashboard({ userRole }: DashboardProps) {
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-gray-900">{!isBatchActive || tempNow == null ? "--" : `${tempNow.toFixed(1)}°C`}</p>
+                <p className="text-gray-900 font-bold">{!isBatchActive || tempNow == null ? "--" : `${tempNow.toFixed(1)}°C`}</p>
                 <Badge variant="outline" className={badgeClass(tempStatus)}>
                   {tempStatus}
                 </Badge>
@@ -572,7 +544,7 @@ export default function Dashboard({ userRole }: DashboardProps) {
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-gray-900">
+                <p className="text-gray-900 font-bold">
                   {!isBatchActive || pressureNow == null ? "--" : `${pressureNow.toFixed(2)} PSI`}
                 </p>
                 <Badge variant="outline" className={badgeClass(pressureStatus)}>
@@ -609,7 +581,7 @@ export default function Dashboard({ userRole }: DashboardProps) {
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-gray-900">
+                <p className="text-gray-900 font-bold">
                   {!isBatchActive || brixNow == null ? "--" : `${brixNow.toFixed(1)} Brix`}
                 </p>
                 <Badge variant="outline" className={badgeClass(brixStatus)}>
@@ -646,7 +618,7 @@ export default function Dashboard({ userRole }: DashboardProps) {
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-gray-900">{!isBatchActive || phNow == null ? "--" : `${phNow.toFixed(2)} pH`}</p>
+                <p className="text-gray-900 font-bold">{!isBatchActive || phNow == null ? "--" : `${phNow.toFixed(2)} pH`}</p>
                 <Badge variant="outline" className={badgeClass(phStatus)}>
                   {phStatus}
                 </Badge>
@@ -685,7 +657,7 @@ export default function Dashboard({ userRole }: DashboardProps) {
         </CardContent>
       </Card>
 
-      {/* ✅ NEW: START BATCH MODAL */}
+      {/* START BATCH MODAL */}
       {isStartModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-sm">
