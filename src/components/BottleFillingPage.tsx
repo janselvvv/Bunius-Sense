@@ -26,6 +26,12 @@ interface ActiveFermentationBatch {
   mustVolume: number; // in Liters
 }
 
+// Parses strings like "10L" (as stored by FermentationTracker/Dashboard) into a number.
+function parseVolumeLiters(raw: unknown): number {
+  const match = String(raw ?? "0").match(/\d+(\.\d+)?/);
+  return match ? parseFloat(match[0]) : 0;
+}
+
 const BottleFillingMonitor = () => {
   const [liveData, setLiveData] = useState<LiveData>({
     status: 'offline',
@@ -39,11 +45,21 @@ const BottleFillingMonitor = () => {
   const [recentBatches, setRecentBatches] = useState<BatchReport[]>([]);
 
   // 1. Listen to the Active Fermentation Batch
+  // NOTE: FermentationTracker.tsx and Dashboard.tsx both write the active batch to
+  // 'fermentation/currentBatch/details' (with the volume stored as a string like "10L"
+  // under `initialVolume`). This used to point at a different, unused path
+  // ('fermentation/active_batch' / `mustVolume`), so this panel never showed real data.
   useEffect(() => {
-    const batchRef = ref(db, 'fermentation/active_batch'); 
+    const batchRef = ref(db, 'fermentation/currentBatch/details');
     const unsubscribe = onValue(batchRef, (snapshot) => {
       if (snapshot.exists()) {
-        setActiveBatch({ id: snapshot.key, ...snapshot.val() });
+        const details = snapshot.val();
+        setActiveBatch({
+          id: snapshot.key ?? details.batchId ?? 'active',
+          mustVolume: parseVolumeLiters(details.initialVolume),
+        });
+      } else {
+        setActiveBatch(null);
       }
     });
     return () => unsubscribe();
