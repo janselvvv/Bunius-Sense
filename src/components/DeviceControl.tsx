@@ -27,7 +27,7 @@ interface Device {
   id: string;
   name: string;
   type: string;
-  status: "online" | "offline";
+  status: "online" | "offline" | "manual";
   icon: LucideIcon;
   lastUpdate: string;
   lastSeen?: number;
@@ -59,7 +59,7 @@ function formatLastSeen(lastSeen?: number): string {
 function WifiSetupModal({
   open,
   onClose,
-  deviceName = "Sugar Monitor",
+  deviceName = "Sensor Module",
 }: {
   open: boolean;
   onClose: () => void;
@@ -232,14 +232,15 @@ export default function DeviceControl() {
     },
     {
       id: "2",
-      name: "Sugar Monitor",
-      type: "sensor",
-      status: "offline",
+      name: "Sugar Test (Manual)",
+      type: "manual",
+      status: "manual",
       icon: DropletIcon,
-      lastUpdate: "Waiting for device...",
+      lastUpdate: "No manual reading yet",
       value: "-- Brix",
       enabled: true,
-      controlKey: "sugarMonitor",
+      // No controlKey: this isn't ESP32 hardware — the operator logs Brix by hand
+      // from the Dashboard. See handleLogSugarTest() in Dashboard.tsx.
     },
     {
       id: "3",
@@ -285,6 +286,9 @@ export default function DeviceControl() {
     const controlRef = ref(db, "deviceControl/sugarMonitor");
     const statusRef = ref(db, "deviceStatus/sugarMonitor");
     const currentRef = ref(db, "sensors/current");
+    // Brix readings live under sensors/sugar/current/brix (see Dashboard.tsx / FermentationTracker.tsx),
+    // not sensors/current/sugarBrix — that path is never written, so it was read here separately.
+    const sugarRef = ref(db, "sensors/sugar/current");
 
     // ✅ Helper to push offline notification
     const checkAndNotifyOfflineStatus = async (status: string) => {
@@ -296,7 +300,7 @@ export default function DeviceControl() {
                 await push(ref(db, 'notifications'), {
                     type: 'warning',
                     title: 'Device Offline',
-                    message: 'The Sugar Monitor module has lost connection or stopped sending heartbeats.',
+                    message: 'The sensor module (temperature & pH) has lost connection or stopped sending heartbeats.',
                     timestamp: serverTimestamp(),
                     iconName: 'WifiOffIcon',
                     unread: true
@@ -311,7 +315,7 @@ export default function DeviceControl() {
                 await push(ref(db, 'notifications'), {
                     type: 'success',
                     title: 'Device Online',
-                    message: 'The Sugar Monitor module has reconnected successfully.',
+                    message: 'The sensor module (temperature & pH) has reconnected successfully.',
                     timestamp: serverTimestamp(),
                     iconName: 'WifiIcon',
                     unread: true
@@ -377,16 +381,6 @@ export default function DeviceControl() {
             };
           }
 
-          if (device.name === "Sugar Monitor") {
-            return {
-              ...device,
-              value:
-                typeof data.sugarBrix === "number"
-                  ? `${data.sugarBrix.toFixed(1)} Brix`
-                  : device.value,
-            };
-          }
-
           if (device.name === "Acidity Sensor") {
             return {
               ...device,
@@ -406,6 +400,21 @@ export default function DeviceControl() {
 
           return device;
         })
+      );
+    });
+
+    const unsubSugar = onValue(sugarRef, (snapshot) => {
+      const data = snapshot.val();
+      const brix = typeof data?.brix === "number" ? data.brix : null;
+      const time = typeof data?.time === "number" ? data.time : undefined;
+      if (brix === null) return;
+
+      setDevices((prev) =>
+        prev.map((device) =>
+          device.name === "Sugar Test (Manual)"
+            ? { ...device, value: `${brix.toFixed(1)} Brix`, lastUpdate: time ? formatLastSeen(time) : device.lastUpdate }
+            : device
+        )
       );
     });
 
@@ -431,6 +440,7 @@ export default function DeviceControl() {
       unsubControl();
       unsubStatus();
       unsubCurrent();
+      unsubSugar();
       clearInterval(interval);
     };
   }, []);
@@ -440,7 +450,7 @@ export default function DeviceControl() {
     if (!currentDevice || currentDevice.status === "offline") return;
 
     if (currentDevice.controlKey !== "sugarMonitor") {
-      alert("Only Sugar Monitor is connected to the actual ESP32 control right now.");
+      alert("This device isn't connected to ESP32 hardware control. (Sugar Test is logged manually from the Dashboard.)");
       return;
     }
 
@@ -503,7 +513,7 @@ export default function DeviceControl() {
       <WifiSetupModal
         open={wifiModalOpen}
         onClose={() => setWifiModalOpen(false)}
-        deviceName="Sugar Monitor"
+        deviceName="Sensor Module"
       />
 
       <div className="flex justify-between items-center">
@@ -570,12 +580,20 @@ export default function DeviceControl() {
                     <div className="flex items-center gap-3">
                       <div
                         className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                          device.status === "online" ? "bg-green-100" : "bg-gray-100"
+                          device.status === "online"
+                            ? "bg-green-100"
+                            : device.status === "manual"
+                            ? "bg-purple-100"
+                            : "bg-gray-100"
                         }`}
                       >
                         <Icon
                           className={`w-6 h-6 ${
-                            device.status === "online" ? "text-green-600" : "text-gray-400"
+                            device.status === "online"
+                              ? "text-green-600"
+                              : device.status === "manual"
+                              ? "text-[#6B2C5D]"
+                              : "text-gray-400"
                           }`}
                         />
                       </div>
@@ -583,7 +601,7 @@ export default function DeviceControl() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-gray-900">{device.name}</p>
-                          {device.status === "online" ? (
+                          {device.status === "online" && (
                             <Badge
                               variant="outline"
                               className="border-green-500 text-green-600 text-xs"
@@ -591,7 +609,8 @@ export default function DeviceControl() {
                               <WifiIcon className="w-3 h-3 mr-1" />
                               Online
                             </Badge>
-                          ) : (
+                          )}
+                          {device.status === "offline" && (
                             <Badge
                               variant="outline"
                               className="border-gray-400 text-gray-500 text-xs"
@@ -600,8 +619,16 @@ export default function DeviceControl() {
                               Offline
                             </Badge>
                           )}
+                          {device.status === "manual" && (
+                            <Badge
+                              variant="outline"
+                              className="border-purple-400 text-[#6B2C5D] text-xs"
+                            >
+                              Manual Entry
+                            </Badge>
+                          )}
 
-                          {device.enabled ? (
+                          {device.status !== "manual" && (device.enabled ? (
                             <Badge variant="outline" className="text-xs">
                               Enabled
                             </Badge>
@@ -612,7 +639,7 @@ export default function DeviceControl() {
                             >
                               Disabled
                             </Badge>
-                          )}
+                          ))}
                         </div>
 
                         <p className="text-sm text-gray-500 mt-1">
@@ -620,19 +647,21 @@ export default function DeviceControl() {
                         </p>
                       </div>
 
-                      <Switch
-                        checked={device.enabled}
-                        onCheckedChange={() => toggleDevice(device.id)}
-                        disabled={
-                          device.status === "offline" ||
-                          loadingId === device.id ||
-                          device.controlKey !== "sugarMonitor"
-                        }
-                        className="data-[state=checked]:bg-[#8B1538]"
-                      />
+                      {device.status !== "manual" && (
+                        <Switch
+                          checked={device.enabled}
+                          onCheckedChange={() => toggleDevice(device.id)}
+                          disabled={
+                            device.status === "offline" ||
+                            loadingId === device.id ||
+                            device.controlKey !== "sugarMonitor"
+                          }
+                          className="data-[state=checked]:bg-[#8B1538]"
+                        />
+                      )}
                     </div>
 
-                    {device.name === "Sugar Monitor" && (
+                    {device.name === "Temperature Sensor" && (
                       <div className="pt-3">
                         <Button
                           variant="outline"
@@ -642,7 +671,7 @@ export default function DeviceControl() {
                           Change Wi-Fi (Setup Mode)
                         </Button>
                         <p className="text-xs text-gray-500 mt-2">
-                          Use this when deploying to a different network while the device is sealed.
+                          Use this when deploying to a different network while the device is sealed. Covers the temperature &amp; pH sensor module.
                         </p>
                       </div>
                     )}

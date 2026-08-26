@@ -86,18 +86,10 @@ function badgeClass(status: string) {
   return "border-gray-300 text-gray-600 text-xs";
 }
 
-function pitchToBrix(pitch: number): number {
-  const P_WATER = 17.49795; 
-  const P_FINAL = 15.20;    
-
-  let ratio = (P_WATER - pitch) / (P_WATER - P_FINAL);
-  let brix = ratio * 24;
-
-  if (!Number.isFinite(brix)) return NaN;
-  if (brix < 0) brix = 0;
-  if (brix > 30) brix = 30;
-  return brix;
-}
+// Sugar/Brix is measured manually by the operator (no automatic sensor) and logged
+// via handleLogSugarTest below. This constant drives the "measure again" reminder.
+const SUGAR_TEST_INTERVAL_DAYS = 14;
+const SUGAR_TEST_INTERVAL_MS = SUGAR_TEST_INTERVAL_DAYS * 24 * 60 * 60 * 1000;
 
 export default function Dashboard({ userRole }: DashboardProps) {
   const [tempNow, setTempNow] = useState<number | null>(null);
@@ -123,13 +115,16 @@ export default function Dashboard({ userRole }: DashboardProps) {
   const [isStartModalOpen, setIsStartModalOpen] = useState<boolean>(false);
   const [newBatch, setNewBatch] = useState({ volume: '', fruits: '', targetBrix: '2.0' });
 
+  // Manual sugar (Brix) test entry
+  const [isSugarModalOpen, setIsSugarModalOpen] = useState<boolean>(false);
+  const [sugarInput, setSugarInput] = useState<string>('');
+
   const serverOffsetRef = useRef<number>(0);
-  const lastTiltTsRef = useRef<number | null>(null);
-  const processingRef = useRef(false);
 
   const lastNotifiedTemp = useRef<number | null>(null);
   const lastNotifiedPh = useRef<number | null>(null);
   const lastNotifiedBrix = useRef<number | null>(null);
+  const sugarReminderNotifiedRef = useRef<boolean>(false);
 
   const dbReady = !!db;
 
@@ -223,8 +218,6 @@ export default function Dashboard({ userRole }: DashboardProps) {
       serverOffsetRef.current = Number(snap.val()) || 0;
     });
 
-    const serverNow = () => Date.now() + (serverOffsetRef.current || 0);
-
     const currentRef = ref(database, "sensors/current");
     onValue(currentRef, (snap) => {
       const v = snap.val();
@@ -242,6 +235,9 @@ export default function Dashboard({ userRole }: DashboardProps) {
       if (p !== null) checkAndTriggerNotification('ph', p);
     }, () => setIsLive(false));
 
+    // Sugar/Brix has no automatic sensor — it's entered manually by the operator via
+    // handleLogSugarTest() below, which writes to this same path (sensors/sugar/current)
+    // and pushes the previous reading into sensors/sugar/history.
     const sugarCurrentRef = ref(database, "sensors/sugar/current");
     onValue(sugarCurrentRef, (snap) => {
       const v = snap.val();
@@ -254,51 +250,8 @@ export default function Dashboard({ userRole }: DashboardProps) {
 
       if (typeof v.time === "number") {
         setUpdatedAt(v.time);
-        setIsLive(true);
       }
     });
-
-    const tiltRef = ref(database, "sensors/tilt/current");
-    const sugarHistoryRef = ref(database, "sensors/sugar/history");
-
-    onValue(tiltRef, async (snap) => {
-        const tilt = snap.val();
-        if (!tilt) return;
-        const pitch = typeof tilt.pitch === "number" ? tilt.pitch : null;
-        if (pitch == null) return;
-        const ts = typeof tilt.ts_ms === "number" && tilt.ts_ms > 1_000_000_000_000 ? tilt.ts_ms : serverNow();
-
-        if (lastTiltTsRef.current === ts) return;
-        lastTiltTsRef.current = ts;
-
-        if (processingRef.current) return;
-        processingRef.current = true;
-
-        try {
-          const brix = pitchToBrix(pitch);
-          if (!Number.isFinite(brix)) return;
-
-          const prevSnap = await get(sugarCurrentRef);
-          const prev = prevSnap.exists() ? prevSnap.val() : null;
-
-          if (prev && typeof prev.time === "number" && typeof prev.brix === "number" && prev.time !== ts) {
-            if (isBatchActive) {
-               await push(sugarHistoryRef, { brix: Number(prev.brix), time: Number(prev.time) });
-            }
-          }
-
-          await set(sugarCurrentRef, { brix, pitch, time: ts });
-
-          setBrixNow(brix);
-          setUpdatedAt(ts);
-          setIsLive(true);
-          
-          checkAndTriggerNotification('brix', brix);
-        } finally {
-          processingRef.current = false;
-        }
-      }, () => setIsLive(false)
-    );
 
     const tempQ = query(ref(database, "sensors/history/temperature"), limitToLast(30));
     const phQ = query(ref(database, "sensors/history/ph"), limitToLast(30));
@@ -311,7 +264,7 @@ export default function Dashboard({ userRole }: DashboardProps) {
     onValue(sugarHistQ, (snap) => setBrixHistory(toSugarHistoryPoints(snap.val())));
 
     return () => {
-      off(offsetRef); off(currentRef); off(tiltRef); off(sugarCurrentRef); off(batchRef);
+      off(offsetRef); off(currentRef); off(sugarCurrentRef); off(batchRef);
       off(ref(database, "sensors/history/temperature")); off(ref(database, "sensors/history/ph"));
       off(ref(database, "sensors/history/pressurePSI")); off(ref(database, "sensors/sugar/history"));
     };
@@ -334,12 +287,13 @@ export default function Dashboard({ userRole }: DashboardProps) {
     await set(ref(db, 'sensors/sugar/history'), null);
     await set(ref(db, 'sensors/current'), null);
     await set(ref(db, 'sensors/sugar/current'), null);
-    await set(ref(db, 'sensors/tilt/current'), null);
 
     setTempNow(null);
     setPhNow(null);
     setBrixNow(null);
     setPressureNow(null);
+    setUpdatedAt(null);
+    sugarReminderNotifiedRef.current = false;
 
     await set(ref(db, 'fermentation/currentBatch'), {
       details: {
@@ -348,7 +302,8 @@ export default function Dashboard({ userRole }: DashboardProps) {
         initialVolume: `${newBatch.volume}L`,
         fruitsUsed: `${newBatch.fruits}kg`,
         targetBrix: Number(newBatch.targetBrix),
-        startDate: new Date().toLocaleDateString()
+        startDate: new Date().toLocaleDateString(),
+        startedAt: Date.now() // numeric timestamp, used to schedule the first sugar-test reminder
       },
       stages: [
         { id: 1, name: 'Sorting', status: 'completed', date: new Date().toLocaleDateString() },
@@ -391,6 +346,60 @@ export default function Dashboard({ userRole }: DashboardProps) {
     
     setIsStopModalOpen(false); 
   };
+
+  // Manual sugar (Brix) test entry — the owner/operator measures Brix by hand
+  // (hydrometer/refractometer) and logs the result here instead of a sensor reading it.
+  const handleLogSugarTest = async (e: any) => {
+    e.preventDefault();
+    if (!db) return;
+
+    const brix = Number(sugarInput);
+    if (!Number.isFinite(brix) || brix < 0) return;
+
+    const now = Date.now() + (serverOffsetRef.current || 0);
+    const sugarCurrentRef = ref(db, 'sensors/sugar/current');
+
+    // Archive the previous reading (if any) before overwriting it
+    const prevSnap = await get(sugarCurrentRef);
+    const prev = prevSnap.exists() ? prevSnap.val() : null;
+    if (prev && typeof prev.time === 'number' && typeof prev.brix === 'number') {
+      await push(ref(db, 'sensors/sugar/history'), { brix: Number(prev.brix), time: Number(prev.time) });
+    }
+
+    await set(sugarCurrentRef, { brix, time: now, source: 'manual' });
+
+    sugarReminderNotifiedRef.current = false;
+    setIsSugarModalOpen(false);
+    setSugarInput('');
+  };
+
+  // Reminds the owner to measure sugar again every SUGAR_TEST_INTERVAL_DAYS (14) days.
+  const daysSinceSugarTest = useMemo(() => {
+    const reference = updatedAt ?? (typeof activeBatchDetails?.startedAt === 'number' ? activeBatchDetails.startedAt : null);
+    if (!reference) return null;
+    return Math.floor((Date.now() - reference) / (24 * 60 * 60 * 1000));
+  }, [updatedAt, activeBatchDetails]);
+
+  const sugarTestDue = isBatchActive && daysSinceSugarTest !== null && daysSinceSugarTest >= SUGAR_TEST_INTERVAL_DAYS;
+
+  useEffect(() => {
+    if (!canNotify || !isBatchActive) return;
+
+    const checkReminder = () => {
+      if (sugarTestDue && !sugarReminderNotifiedRef.current) {
+        sugarReminderNotifiedRef.current = true;
+        pushNotification(
+          "Sugar Test Reminder",
+          `It's been ${daysSinceSugarTest} days since the last sugar (Brix) test. Please measure and log a new reading.`,
+          "DropletIcon"
+        );
+      }
+    };
+
+    checkReminder();
+    const id = setInterval(checkReminder, 60 * 60 * 1000); // re-check hourly in case the tab stays open
+    return () => clearInterval(id);
+  }, [canNotify, isBatchActive, sugarTestDue, daysSinceSugarTest]);
 
   const temperatureData = useMemo(() => tempHistory.map((p) => ({ time: formatTime(p.time), value: p.value })), [tempHistory]);
   const pressureData = useMemo(() => pressureHistory.map((p) => ({ time: formatTime(p.time), value: p.value })), [pressureHistory]);
@@ -601,6 +610,28 @@ export default function Dashboard({ userRole }: DashboardProps) {
                 <Line type="monotone" dataKey="value" stroke="#6B2C5D" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
+
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+              <div>
+                <p className="text-xs text-gray-500">Measured manually — no sugar sensor</p>
+                <p className={`text-xs font-medium mt-0.5 ${sugarTestDue ? "text-amber-600" : "text-gray-600"}`}>
+                  {daysSinceSugarTest === null
+                    ? "No reading logged yet"
+                    : daysSinceSugarTest === 0
+                    ? "Last tested today"
+                    : `Last tested ${daysSinceSugarTest} day${daysSinceSugarTest === 1 ? "" : "s"} ago`}
+                  {sugarTestDue && " — due for retest"}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setIsSugarModalOpen(true)}
+                disabled={!isBatchActive}
+                className="bg-[#6B2C5D] hover:bg-[#4B1C3D] text-white"
+              >
+                Log Sugar Test
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -650,7 +681,7 @@ export default function Dashboard({ userRole }: DashboardProps) {
             <div>
               <p className="text-amber-900 text-sm font-semibold">System Notice</p>
               <p className="text-amber-700 text-xs mt-1">
-                Sugar (Brix) is dynamically computed from tilt pitch sensor logic and synced with AI thresholds. Graphs only record when a batch is active.
+                Sugar (Brix) is measured manually by the operator — log a new reading every {SUGAR_TEST_INTERVAL_DAYS} days. Graphs only record when a batch is active.
               </p>
             </div>
           </div>
@@ -704,6 +735,39 @@ export default function Dashboard({ userRole }: DashboardProps) {
                   </Button>
                 </div>
               </div>
+            </Card>
+          </motion.div>
+        </div>
+      )}
+
+      {/* LOG SUGAR TEST MODAL */}
+      {isSugarModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-sm">
+            <Card className="p-6 bg-white rounded-3xl shadow-xl">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-lg">Log Sugar Test Result</h3>
+                <button onClick={() => setIsSugarModalOpen(false)}><XIcon className="w-5 h-5 text-gray-500 hover:text-gray-900 transition-colors"/></button>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                Enter the Brix reading from your hydrometer/refractometer test. Measure again in {SUGAR_TEST_INTERVAL_DAYS} days.
+              </p>
+              <form onSubmit={handleLogSugarTest} className="space-y-4">
+                <Input
+                  required
+                  autoFocus
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="30"
+                  placeholder="Brix reading (e.g. 16.5)"
+                  value={sugarInput}
+                  onChange={e => setSugarInput(e.target.value)}
+                />
+                <Button type="submit" className="w-full bg-[#6B2C5D] hover:bg-[#4B1C3D] py-6 text-white border-none transition-colors">
+                  Save Reading
+                </Button>
+              </form>
             </Card>
           </motion.div>
         </div>
