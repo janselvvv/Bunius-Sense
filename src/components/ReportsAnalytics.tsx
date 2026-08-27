@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
+import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import {
   DownloadIcon,
@@ -14,7 +15,9 @@ import {
   PrinterIcon,
   Loader2Icon,
   Trash2Icon,
-  LeafIcon // ✅ Added Leaf icon for Fruits
+  LeafIcon, // ✅ Added Leaf icon for Fruits
+  FilterXIcon,
+  SearchIcon,
 } from "lucide-react";
 import {
   LineChart,
@@ -157,12 +160,73 @@ export default function ReportsAnalytics() {
     ];
   }, [historicalData]);
 
-  // 4. EXPORT ENGINE
+  // 3b. BATCH REPORT FILTERS
+  type QualityFilter = "all" | "premium" | "standard" | "below";
+  type SortOrder = "newest" | "oldest";
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [qualityFilter, setQualityFilter] = useState<QualityFilter>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("newest");
+
+  function getQualityGrade(brixRaw: unknown): QualityFilter | "unknown" {
+    const brix = parseFloat(String(brixRaw));
+    if (isNaN(brix)) return "unknown";
+    if (brix >= 15 && brix <= 18) return "premium";
+    if (brix >= 13 && brix < 15) return "standard";
+    return "below";
+  }
+
+  const hasActiveFilters =
+    searchQuery.trim() !== "" || qualityFilter !== "all" || dateFrom !== "" || dateTo !== "" || sortOrder !== "newest";
+
+  const resetFilters = () => {
+    setSearchQuery("");
+    setQualityFilter("all");
+    setDateFrom("");
+    setDateTo("");
+    setSortOrder("newest");
+  };
+
+  const filteredHistory = useMemo(() => {
+    let data = [...historicalData];
+
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      data = data.filter((b) => String(b.batchId || "").toLowerCase().includes(q));
+    }
+
+    if (qualityFilter !== "all") {
+      data = data.filter((b) => getQualityGrade(b.targetBrixAchieved) === qualityFilter);
+    }
+
+    if (dateFrom) {
+      const fromTs = new Date(dateFrom).setHours(0, 0, 0, 0);
+      data = data.filter((b) => typeof b.completedAt === "number" && b.completedAt >= fromTs);
+    }
+
+    if (dateTo) {
+      const toTs = new Date(dateTo).setHours(23, 59, 59, 999);
+      data = data.filter((b) => typeof b.completedAt === "number" && b.completedAt <= toTs);
+    }
+
+    data.sort((a, b) =>
+      sortOrder === "newest" ? (b.completedAt || 0) - (a.completedAt || 0) : (a.completedAt || 0) - (b.completedAt || 0)
+    );
+
+    return data;
+  }, [historicalData, searchQuery, qualityFilter, dateFrom, dateTo, sortOrder]);
+
+  // 4. EXPORT ENGINE — exports the currently filtered batch list, so what you see
+  // in the Production Reports Log below is exactly what gets exported.
   const getReportData = () => {
     return {
-      title: "Full Fermentation History",
+      title: hasActiveFilters
+        ? `Filtered Fermentation History (${filteredHistory.length} of ${historicalData.length} batches)`
+        : "Full Fermentation History",
       headers: ["Batch ID", "Start Date", "Completed At", "Final Yield", "Fruits Used", "Avg Temp", "Avg pH", "Final Brix"],
-      rows: historicalData.map((item) => [
+      rows: filteredHistory.map((item) => [
         item.batchId,
         item.startDate || "Unknown",
         new Date(item.completedAt).toLocaleDateString(),
@@ -268,8 +332,6 @@ export default function ReportsAnalytics() {
       </div>
     );
   }
-
-  const reversedHistory = [...historicalData].reverse();
 
   return (
     <div className="p-4 space-y-4 pb-20">
@@ -456,11 +518,97 @@ export default function ReportsAnalytics() {
           <h2 className="font-bold text-gray-900 flex items-center gap-2">
             <FileTextIcon className="w-5 h-5 text-[#8B1538]" /> Production Reports Log
           </h2>
-          <p className="text-xs text-gray-500 mb-2">Raw data from all completed batches.</p>
-          
+          <p className="text-xs text-gray-500 mb-2">
+            Showing {filteredHistory.length} of {historicalData.length} completed batches.
+          </p>
+
+          {/* FILTER BAR */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end bg-gray-50 border border-gray-100 rounded-2xl p-3">
+            <div className="flex-1 min-w-[160px]">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                Search Batch ID
+              </label>
+              <div className="relative">
+                <SearchIcon className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Input
+                  placeholder="e.g. Batch #1234"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-9 text-sm pl-9"
+                />
+              </div>
+            </div>
+
+            <div className="min-w-[150px]">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Quality</label>
+              <select
+                value={qualityFilter}
+                onChange={(e) => setQualityFilter(e.target.value as QualityFilter)}
+                className="h-9 w-full rounded-md border border-gray-200 bg-white text-sm px-2 text-gray-700"
+              >
+                <option value="all">All Grades</option>
+                <option value="premium">Premium (15-18 Brix)</option>
+                <option value="standard">Standard (13-14 Brix)</option>
+                <option value="below">Below Standard</option>
+              </select>
+            </div>
+
+            <div className="min-w-[130px]">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">From</label>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
+
+            <div className="min-w-[130px]">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">To</label>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
+
+            <div className="min-w-[140px]">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Sort</label>
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+                className="h-9 w-full rounded-md border border-gray-200 bg-white text-sm px-2 text-gray-700"
+              >
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+              </select>
+            </div>
+
+            {hasActiveFilters && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={resetFilters}
+                className="h-9 gap-1 text-gray-600 border-gray-300"
+              >
+                <FilterXIcon className="w-3.5 h-3.5" /> Clear Filters
+              </Button>
+            )}
+          </div>
+
           <ScrollArea className="h-[400px]">
             <div className="space-y-3 pb-4">
-               {reversedHistory.map((report) => (
+               {filteredHistory.length === 0 ? (
+                 <div className="flex flex-col items-center text-center py-10 text-gray-400">
+                   <FilterXIcon className="w-8 h-8 mb-2" />
+                   <p className="text-sm font-medium text-gray-500">No batches match your filters.</p>
+                   <Button variant="outline" size="sm" onClick={resetFilters} className="mt-3">
+                     Clear Filters
+                   </Button>
+                 </div>
+               ) : (
+               filteredHistory.map((report) => (
                  <Card key={report.id} className="overflow-hidden border-l-4 border-green-600 shadow-sm">
                    <CardContent className="p-4">
                      <div className="flex justify-between items-start mb-3">
@@ -495,7 +643,8 @@ export default function ReportsAnalytics() {
                      </div>
                    </CardContent>
                  </Card>
-               ))}
+               ))
+               )}
             </div>
           </ScrollArea>
         </div>
