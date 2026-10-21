@@ -1,0 +1,44 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "sensors": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "fermentation": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email === 'jan.selvister13@gmail.com'"
+    },
+    "sensorArchive": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "notifications": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "deviceControl": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email === 'jan.selvister13@gmail.com'"
+    },
+    "deviceStatus": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "system": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "reports": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "deviceTokens": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    }
+  }
+}

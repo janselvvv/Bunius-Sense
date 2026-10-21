@@ -9,9 +9,14 @@ build - Copy
 w.bat
 *.p12
 netshare.p12
+# Firebase per-developer build config (contains project API keys) — add locally, never commit
+android/app/google-services.json
+ios/App/App/GoogleService-Info.plist
 android/.gradle
 android/build
 android/app/build
 android/capacitor-cordova-android-plugins/build
 ios/App/DerivedData
 *.log
+# Trainer output — model artifacts must not be committed or served
+public/model_abv/

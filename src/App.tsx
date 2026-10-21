@@ -21,7 +21,8 @@ import {
   clearTrust,
   MAX_SESSION_MS,
 } from "./lib/pinLock";
-import { initializePushNotifications } from "./lib/pushNotifications";
+import { clearDeviceTokens, initializePushNotifications } from "./lib/pushNotifications";
+import { useSugarAutoLog } from "./hooks/useSugarAutoLog";
 
 const FruitSorting = lazy(() => import("./components/FruitSorting"));
 const FermentationTracker = lazy(() => import("./components/FermentationTracker"));
@@ -94,7 +95,12 @@ function AuthedGate({ children }: { children: ReactNode }) {
       clearPin();
       clearTrust();
       setTrust("expired");
-      void signOut(auth).catch(() => undefined);
+      // Rules require auth.uid === $uid on deviceTokens, so this must be written
+      // while the session is still alive — and awaited, or the delete can lose
+      // the race against the token revocation below.
+      clearDeviceTokens(uid).then(() => {
+        void signOut(auth).catch(() => undefined);
+      });
     } else {
       setTrust("ok");
     }
@@ -167,6 +173,10 @@ function MainLayout() {
     if (next !== currentScreen) navigate(`/app/${next}`);
   };
 
+  // Soft-sensor auto-log lives here, not on the Insights screen: it must keep
+  // the Dashboard's live reading fresh no matter which tab is open.
+  useSugarAutoLog();
+
   const [pinManageOpen, setPinManageOpen] = useState(false);
 
   const closePinManage = () => {
@@ -175,11 +185,11 @@ function MainLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF6F1]">
-      <div className="w-full bg-[#FAF6F1] min-h-screen pb-20">
+    <div className="min-h-screen bg-background">
+      <div className="w-full bg-background min-h-screen pb-20">
         <Suspense
           fallback={
-            <div className="flex items-center justify-center py-24 text-gray-500 animate-pulse">
+            <div className="flex items-center justify-center py-24 text-muted-foreground animate-pulse">
               Loading…
             </div>
           }

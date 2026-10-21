@@ -66,13 +66,13 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   return (
     <div className="min-h-screen relative overflow-hidden">
       {/* Background Image */}
-      <div className="absolute inset-0 z-0">
+      <div className="absolute inset-0 z-0 bg-[#2A0A12]">
         <ImageWithFallback
           src="https://images.unsplash.com/photo-1610968386377-46ef210bab6c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxiaWduYXklMjBmcnVpdCUyMHdpbmUlMjBiZXJyeXxlbnwxfHx8fDE3NjA2NjcyNDB8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
           alt="Bignay fruit background"
           className="w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-purple-900/70 to-black/80" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#23060F]/80 via-[#4A0E1E]/70 to-black/80" />
       </div>
 
       {/* Login Content */}
@@ -84,14 +84,14 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               <img
                 src={fermaLogo}
                 alt="Project FERMA Logo"
-                className="w-48 h-48 object-contain filter drop-shadow-2xl"
+                className="w-24 h-24 sm:w-32 sm:h-32 object-contain filter drop-shadow-2xl"
               />
             </div>
-            <p className="text-purple-200 text-xl">Bunius-Sense</p>
+            <p className="text-white/85 text-xl">Bunius-Sense</p>
           </div>
 
           {/* Login Card */}
-          <Card className="bg-white/95 backdrop-blur-sm p-6 shadow-2xl">
+          <Card className="bg-card/95 backdrop-blur-sm p-6 rounded-3xl">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <Label htmlFor="email">Email</Label>
@@ -101,7 +101,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                   placeholder="Enter email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="mt-1"
+                  className="mt-1 h-11"
                   required
                 />
               </div>
@@ -125,9 +125,10 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                     onClick={() => setShowPassword((v) => !v)}
                     className="
                       absolute inset-y-0 right-2
-                      flex items-center
-                      text-gray-500
-                      hover:text-gray-700
+                      flex items-center justify-center
+                      min-h-[44px] min-w-[44px]
+                      text-muted-foreground
+                      hover:text-foreground
                     "
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
@@ -136,25 +137,25 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                 </div>
               </div>
 
-              {err && <p className="text-sm text-red-600">{err}</p>}
-              {msg && <p className="text-sm text-green-700">{msg}</p>}
+              {err && <p role="alert" className="text-sm text-destructive">{err}</p>}
+              {msg && <p className="text-sm text-emerald-700">{msg}</p>}
 
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[#8B1538] hover:bg-[#6B1028] text-white"
+                className="w-full"
               >
                 {loading ? "Signing in..." : "Sign In"}
               </Button>
             </form>
 
-            <p className="text-center text-sm text-gray-500 mt-4">
+            <p className="text-center text-sm text-muted-foreground mt-4">
               Forgot password?{" "}
               <button
                 type="button"
                 onClick={handleReset}
                 disabled={loading}
-                className="text-[#8B1538] hover:underline"
+                className="text-primary hover:underline"
               >
                 Reset here
               </button>
